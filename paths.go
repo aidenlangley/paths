@@ -175,15 +175,15 @@ type FileInfo struct {
 	Modified  time.Time `json:"modified"`
 }
 
-// Determines if this [*FileInfo] is the same as [other] by comparing
-// [FileInfo.Name], [FileInfo.Size] & [FileInfo.Modified].
+// Determines if this [*FileInfo] is the same as other by comparing
+// name, size & modified [time.Time].
 func (fi *FileInfo) Equals(other *FileInfo) bool {
 	return fi.Name == other.Name &&
 		fi.Size == other.Size &&
 		fi.Modified == other.Modified
 }
 
-// Determines if this [*FileInfo] is newer than [other].
+// Determines if this [*FileInfo] is newer than other.
 func (fi *FileInfo) Newer(other *FileInfo) bool {
 	return fi.Modified.After(other.Modified)
 }
@@ -191,7 +191,6 @@ func (fi *FileInfo) Newer(other *FileInfo) bool {
 // Return terminal friendly string.
 func (fi FileInfo) String() string {
 	return fi.Path
-
 }
 
 // Calls [os.Open] and then [os.File.Stat] to populate [FileInfo].
