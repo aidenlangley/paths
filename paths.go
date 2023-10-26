@@ -97,10 +97,8 @@ type PathResolver struct {
 
 // Create a new [*PathResolver].
 //
-// ```
-// r := paths.NewPathResolver(path, paths.ResolveToHome())
-// path, err := r.Resolve()
-// ```
+//	r := paths.NewPathResolver(path, paths.ResolveToHome())
+//	path, err := r.Resolve()
 func NewPathResolver(path string, options ...ResolverOption) *PathResolver {
 	resolver := &PathResolver{Path: path}
 	for _, option := range options {
@@ -144,15 +142,10 @@ func (resolver *PathResolver) Resolve() (string, error) {
 // Error returned by [Open], contains errors returned by [os.Open] & [os.Stat]
 // so you may utilise [errors.Is] like so...
 //
-// ```
-//
-// fi, err := paths.Open(path)
-//
-//	if errors.Is(err, os.PathError) {
-//	   ...
-//	}
-//
-// ```
+//	  fi, err := paths.Open(path)
+//		  if errors.Is(err, os.PathError) {
+//		     ...
+//	 	}
 type FileInfoError struct {
 	path string
 	err  error
