@@ -1,3 +1,6 @@
+
+[![Go Reference](https://pkg.go.dev/badge/git.sr.ht/~nedia/paths.svg)](https://pkg.go.dev/git.sr.ht/~nedia/paths)
+
 # paths
 
 A go module for working with paths.

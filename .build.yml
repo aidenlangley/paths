@@ -1,0 +1,13 @@
+image: alpine/edge
+triggers:
+  - action: email
+    condition: failure
+    to: Aiden Langley <aiden@nedia.dev>
+packages:
+  - go
+tasks:
+  - prep: |
+      cd paths
+      go mod download && go mod verify
+  - test: |
+      go -C nedots test -v ./...
