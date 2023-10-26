@@ -142,10 +142,10 @@ func (resolver *PathResolver) Resolve() (string, error) {
 // Error returned by [Open], contains errors returned by [os.Open] & [os.Stat]
 // so you may utilise [errors.Is] like so...
 //
-//	  fi, err := paths.Open(path)
-//		  if errors.Is(err, os.PathError) {
-//		     ...
-//	 	}
+//	 fi, err := paths.Open(path)
+//		 if errors.Is(err, os.PathError) {
+//		   ...
+//	 }
 type FileInfoError struct {
 	path string
 	err  error
