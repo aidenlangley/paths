@@ -2,6 +2,7 @@ package paths
 
 import (
 	"os"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -14,7 +15,7 @@ func resolve(t *testing.T, p string) string {
 }
 
 func TestResolveLocal(t *testing.T) {
-	_ = resolve(t, "../main.go")
+	_ = resolve(t, "paths.go")
 }
 
 func TestResolveHome(t *testing.T) {
@@ -26,16 +27,14 @@ func TestResolveHome(t *testing.T) {
 }
 
 func TestResolveSystem(t *testing.T) {
-	sep := os.PathSeparator
-	if sep == '/' {
-		_ = resolve(t, "/home")
-	} else if sep == '\'' {
+	if runtime.GOOS == "windows" {
 		_ = resolve(t, "C:\\Windows")
+	} else if os.PathSeparator == '/' {
+		_ = resolve(t, "/home")
 	}
 }
 
 func openHome(t *testing.T) FileInfo {
-	var err error
 	info, err := Open(Home())
 	if err != nil {
 		t.Errorf("ERR %s", err)
