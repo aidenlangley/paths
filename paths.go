@@ -145,6 +145,7 @@ func (resolver *PathResolver) Resolve() (string, error) {
 // so you may utilise [errors.Is] like so...
 //
 // ```
+//
 // fi, err := paths.Open(path)
 //
 //	if errors.Is(err, os.PathError) {
@@ -194,8 +195,6 @@ func (fi FileInfo) String() string {
 }
 
 // Calls [os.Open] and then [os.File.Stat] to populate [FileInfo].
-//
-// Fatal on [os.File.Stat] errors.
 func Open(p string) (FileInfo, error) {
 	file, err := os.Open(p)
 	if err != nil {
