@@ -1,4 +1,4 @@
-
+[![builds.sr.ht status](https://builds.sr.ht/~nedia/paths/commits/main/.build.yml.svg)](https://builds.sr.ht/~nedia/paths/commits/main/.build.yml?)
 [![Go Reference](https://pkg.go.dev/badge/git.sr.ht/~nedia/paths.svg)](https://pkg.go.dev/git.sr.ht/~nedia/paths)
 
 # paths
