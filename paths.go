@@ -89,7 +89,7 @@ func Resolve(path string) (string, error) {
 }
 
 // For more complex operations, this struct is provided to facilitate options
-// such as considering $HOME when resolving.
+// such as considering `$HOME` when resolving.
 type PathResolver struct {
 	Path          string
 	ResolveToHome bool
@@ -97,7 +97,7 @@ type PathResolver struct {
 
 // Create a new [*PathResolver].
 //
-// ```go
+// ```
 // r := paths.NewPathResolver(path, paths.ResolveToHome())
 // path, err := r.Resolve()
 // ```
@@ -113,7 +113,7 @@ func NewPathResolver(path string, options ...ResolverOption) *PathResolver {
 // configuration.
 type ResolverOption func(*PathResolver)
 
-// Pass this to [NewPathResolver] to instruct [PathResolver] to consider $HOME
+// Pass this to [NewPathResolver] to instruct [PathResolver] to consider `$HOME`
 // when resolving a path.
 func ResolveToHome() ResolverOption {
 	return func(resolver *PathResolver) {
@@ -124,7 +124,7 @@ func ResolveToHome() ResolverOption {
 // Calls [Resolve], but on error, it will consider its [ResolverOption]s and
 // act appropriately.
 func (resolver *PathResolver) Resolve() (string, error) {
-	// Resolve without consider $HOME.
+	// Resolve without consider `$HOME`.
 	path, err := Resolve(resolver.Path)
 
 	// If there are no errors, we can just return, we've got our path.
@@ -144,7 +144,7 @@ func (resolver *PathResolver) Resolve() (string, error) {
 // Error returned by [Open], contains errors returned by [os.Open] & [os.Stat]
 // so you may utilise [errors.Is] like so...
 //
-// ```go
+// ```
 // fi, err := paths.Open(path)
 //
 //	if errors.Is(err, os.PathError) {
