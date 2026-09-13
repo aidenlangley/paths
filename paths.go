@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Provides shortcuts to [os.UserHomeDir], [os.UserConfigDir]
+// Package paths provides shortcuts to [os.UserHomeDir], [os.UserConfigDir]
 // & [os.UserCacheDir], the ability to [Resolve] a path, and a way to store
 // [os.Stat] info as [FileInfo] via [Open].
 package paths
@@ -39,41 +39,40 @@ func checkAndGetString(s *string, f func() (string, error)) {
 
 	var err error
 	*s, err = f()
-
 	if err != nil {
 		log.Fatalf("paths %s", err)
 	}
 }
 
-// Returns [os.UserHomeDir], but the value is cached locally to avoid
+// Home returns [os.UserHomeDir], but the value is cached locally to avoid
 // unnecessary repeat calls.
 func Home() string {
 	checkAndGetString(&home, os.UserHomeDir)
 	return home
 }
 
-// Returns [os.UserConfigDir], but the value is cached locally to avoid
+// Config returns [os.UserConfigDir], but the value is cached locally to avoid
 // unnecessary repeat calls.
 func Config() string {
 	checkAndGetString(&config, os.UserConfigDir)
 	return config
 }
 
-// Returns [os.UserCacheDir], but the value is cached locally to avoid
+// Cache returns [os.UserCacheDir], but the value is cached locally to avoid
 // unnecessary repeat calls.
 func Cache() string {
 	checkAndGetString(&cache, os.UserCacheDir)
 	return cache
 }
 
-// Check if a file or directory exists at path.
+// Exists checks if a file or directory exists at path.
 func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return !errors.Is(err, os.ErrNotExist)
 }
 
-// Attempt to resolve a path by checking first if it exists, otherwise make it
-// absolute and then check again. Returns [fs.ErrNotExist] on failure.
+// Resolve attempts to resolve a path by checking first if it exists, otherwise
+// make it absolute and then check again. Returns [fs.ErrNotExist] on failure.
 func Resolve(path string) (string, error) {
 	if Exists(path) {
 		return path, nil
@@ -88,14 +87,14 @@ func Resolve(path string) (string, error) {
 	return path, fs.ErrNotExist
 }
 
-// For more complex operations, this struct is provided to facilitate options
-// such as considering `$HOME` when resolving.
+// PathResolver For more complex operations, this struct is provided to
+// facilitate options such as considering `$HOME` when resolving.
 type PathResolver struct {
 	Path          string
 	ResolveToHome bool
 }
 
-// Create a new [*PathResolver].
+// NewPathResolver creates a new [*PathResolver].
 //
 //	r := paths.NewPathResolver(path, paths.ResolveToHome())
 //	path, err := r.Resolve()
@@ -111,16 +110,16 @@ func NewPathResolver(path string, options ...ResolverOption) *PathResolver {
 // configuration.
 type ResolverOption func(*PathResolver)
 
-// Pass this to [NewPathResolver] to instruct [PathResolver] to consider `$HOME`
-// when resolving a path.
+// ResolveToHome pass this to [NewPathResolver] to instruct [PathResolver] to
+// consider `$HOME` when resolving a path.
 func ResolveToHome() ResolverOption {
 	return func(resolver *PathResolver) {
 		resolver.ResolveToHome = true
 	}
 }
 
-// Calls [Resolve], but on error, it will consider its [ResolverOption]s and
-// act appropriately.
+// Resolve calls [Resolve], but on error, it will consider its [ResolverOption]s
+// and act appropriately.
 func (resolver *PathResolver) Resolve() (string, error) {
 	// Resolve without consider `$HOME`.
 	path, err := Resolve(resolver.Path)
@@ -139,8 +138,8 @@ func (resolver *PathResolver) Resolve() (string, error) {
 	return path, err
 }
 
-// Error returned by [Open], contains errors returned by [os.Open] & [os.Stat]
-// so you may utilise [errors.Is] like so...
+// FileInfoError returned by [Open], contains errors returned by [os.Open] &
+// [os.Stat] so you may utilise [errors.Is] like so...
 //
 //	 fi, err := paths.Open(path)
 //		 if errors.Is(err, os.PathError) {
@@ -159,7 +158,7 @@ func (e *FileInfoError) Unwrap() error {
 	return e.err
 }
 
-// Stores information on a file.
+// FileInfo stores information on a file.
 type FileInfo struct {
 	Path      string    `json:"path"`
 	IsRegular bool      `json:"is_regular"`
@@ -169,31 +168,36 @@ type FileInfo struct {
 	Modified  time.Time `json:"modified"`
 }
 
-// Determines if this [*FileInfo] is the same as other by comparing
+// Equals determines if this [*FileInfo] is the same as other by comparing
 // name, size & modified [time.Time].
 func (fi *FileInfo) Equals(other *FileInfo) bool {
 	return fi.Name == other.Name &&
 		fi.Size == other.Size &&
-		fi.Modified == other.Modified
+		fi.Modified.Equal(other.Modified)
 }
 
-// Determines if this [*FileInfo] is newer than other.
+// Newer determines if this [*FileInfo] is newer than other.
 func (fi *FileInfo) Newer(other *FileInfo) bool {
 	return fi.Modified.After(other.Modified)
 }
 
-// Return terminal friendly string.
+// String return terminal friendly string.
 func (fi FileInfo) String() string {
 	return fi.Path
 }
 
-// Calls [os.Open] and then [os.File.Stat] to populate [FileInfo].
+// Open calls [os.Open] and then [os.File.Stat] to populate [FileInfo].
 func Open(p string) (FileInfo, error) {
 	file, err := os.Open(p)
 	if err != nil {
 		return FileInfo{}, &FileInfoError{path: p, err: err}
 	}
-	defer file.Close()
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	info, err := file.Stat()
 	if err != nil {
@@ -217,22 +221,22 @@ func Open(p string) (FileInfo, error) {
 	}, nil
 }
 
-// A [Path] is just a string that can be operated on.
+// Path is just a string that can be operated on.
 //
 // All operations are platform agnostic.
 type Path string
 
-// Check if this [*Path] exists on the system.
+// Exists checks if this [*Path] exists on the system.
 func (p *Path) Exists() bool {
 	return Exists(p.String())
 }
 
-// Calls [Resolve] on this [*Path].
+// Resolve calls [Resolve] on this [*Path].
 func (p *Path) Resolve() (string, error) {
 	return Resolve(p.String())
 }
 
-// Return [Path] as a string.
+// String returns [Path] as a string.
 func (p Path) String() string {
 	return string(p)
 }
