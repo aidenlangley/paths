@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 )
@@ -51,6 +52,13 @@ func Home() string {
 	return home
 }
 
+// HomeWith is the same as [Home], except you can pass it a string to return
+// the full path you want for convenience.
+func HomeWith(p string) string {
+	checkAndGetString(&home, os.UserHomeDir)
+	return path.Join(home, p)
+}
+
 // Config returns [os.UserConfigDir], but the value is cached locally to avoid
 // unnecessary repeat calls.
 func Config() string {
@@ -58,11 +66,25 @@ func Config() string {
 	return config
 }
 
+// ConfigWith is the same as [Config], except you can pass it a string to return
+// the full path you want for convenience.
+func ConfigWith(p string) string {
+	checkAndGetString(&config, os.UserConfigDir)
+	return path.Join(config, p)
+}
+
 // Cache returns [os.UserCacheDir], but the value is cached locally to avoid
 // unnecessary repeat calls.
 func Cache() string {
 	checkAndGetString(&cache, os.UserCacheDir)
 	return cache
+}
+
+// CacheWith is the same as [Cache], except you can pass it a string to return
+// the full path you want for convenience.
+func CacheWith(p string) string {
+	checkAndGetString(&cache, os.UserCacheDir)
+	return path.Join(cache, p)
 }
 
 // Exists checks if a file or directory exists at path.
