@@ -75,3 +75,10 @@ func TestPathResolve(t *testing.T) {
 		resolve(paths.New("/etc/"))
 	}
 }
+
+func TestTimeFunctions(t *testing.T) {
+	p := paths.New("paths.go")
+	if p.TimeSinceModified() < 0 {
+		t.Errorf("ERR TimeSinceModified %v %v", p.FileName(), err)
+	}
+}

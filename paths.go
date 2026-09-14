@@ -158,6 +158,18 @@ func (p *Path) Create() (*os.File, error) {
 }
 
 func (p *Path) Write(b []byte) (int, error) {
+	if p.File == nil {
+		f, err := p.OpenFile(os.O_RDWR, 0o644)
+		if err != nil {
+			if f, err = p.Create(); err != nil {
+				return 0, err
+			}
+		}
+
+		p.File = f
+		_ = p.GetFileInfo()
+	}
+
 	return p.File.Write(b)
 }
 
@@ -165,6 +177,10 @@ func (p *Path) Write(b []byte) (int, error) {
 // [fs.FileInfo] data such as: [fs.FileInfo.Name], [fs.FileInfo.Size],
 // [fs.FileInfo.Mode] and [fs.FileInfo.ModTime].
 func (p *Path) Equals(other *Path) bool {
+	if p.FileInfo == nil || other.FileInfo == nil {
+		return false
+	}
+
 	return p.FileInfo.Name() == other.FileInfo.Name() &&
 		p.FileInfo.Size() == other.FileInfo.Size() &&
 		p.FileInfo.Mode() == other.FileInfo.Mode() &&
@@ -174,12 +190,23 @@ func (p *Path) Equals(other *Path) bool {
 
 // Newer determines if this [os.File] is newer than the other.
 func (p *Path) Newer(other *Path) bool {
+	if other.FileInfo == nil {
+		return true
+	}
+
+	if p.FileInfo == nil {
+		_ = p.GetFileInfo()
+	}
+
 	return p.FileInfo.ModTime().After(other.FileInfo.ModTime())
 }
 
 // TimeSinceModified returns the [time.Duration] since this [os.File] was last
 // modified.
 func (p *Path) TimeSinceModified() time.Duration {
+	if p.FileInfo == nil {
+		_ = p.GetFileInfo()
+	}
 	return time.Since(p.FileInfo.ModTime())
 }
 
