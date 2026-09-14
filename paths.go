@@ -100,7 +100,6 @@ func (p *Path) Create() (*os.File, error) {
 	f, err := os.Create(p.path)
 	if err == nil {
 		p.File = f
-		_ = p.GetFileInfo()
 	}
 	return p.File, err
 }
@@ -115,25 +114,17 @@ func (p *Path) ReadDir() ([]os.DirEntry, error) {
 
 func (p *Path) Open() (*os.File, error) {
 	f, err := os.Open(p.path)
-	if err != nil {
-		if _, err = p.Create(); err == nil {
-			return p.Open()
-		}
+	if err == nil {
+		p.File = f
 	}
-	p.File = f
-	_ = p.GetFileInfo()
 	return p.File, err
 }
 
 func (p *Path) OpenFile(flag int, perm os.FileMode) (*os.File, error) {
 	f, err := os.OpenFile(p.path, flag, perm)
-	if err != nil {
-		if f, err = p.Create(); err == nil {
-			return p.OpenFile(flag, perm)
-		}
+	if err == nil {
+		p.File = f
 	}
-	p.File = f
-	_ = p.GetFileInfo()
 	return p.File, err
 }
 
@@ -161,27 +152,28 @@ func (p *Path) GetFileInfo() fs.FileInfo {
 }
 
 func (p *Path) Modified() time.Time {
-	return p.FileInfo.ModTime()
+	return p.GetFileInfo().ModTime()
 }
 
 func (p *Path) IsDir() bool {
-	return p.FileInfo.IsDir()
+	return p.GetFileInfo().IsDir()
 }
 
 // Equals determines if this [Path] is the same as other by comparing
 // [fs.FileInfo] data such as: [fs.FileInfo.Name], [fs.FileInfo.Size],
 // [fs.FileInfo.Mode] and [fs.FileInfo.ModTime].
 func (p *Path) Equals(other *Path) bool {
-	return p.FileInfo.Name() == other.FileInfo.Name() &&
-		p.FileInfo.Size() == other.FileInfo.Size() &&
-		p.FileInfo.Mode() == other.FileInfo.Mode() &&
-		p.FileInfo.ModTime().Equal(other.FileInfo.ModTime()) &&
-		p.FileInfo.IsDir() == other.FileInfo.IsDir()
+	fi, o := p.GetFileInfo(), other.GetFileInfo()
+	return p.Modified().Equal(other.Modified()) &&
+		fi.Name() == o.Name() &&
+		fi.Size() == o.Size() &&
+		fi.Mode() == o.Mode() &&
+		fi.IsDir() == o.IsDir()
 }
 
 // Newer determines if this [os.File] is newer than the other.
 func (p *Path) Newer(other *Path) bool {
-	return p.FileInfo.ModTime().After(other.FileInfo.ModTime())
+	return p.Modified().After(other.Modified())
 }
 
 // TimeSinceModified returns the [time.Duration] since this [os.File] was last
