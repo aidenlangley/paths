@@ -105,7 +105,7 @@ func (p *Path) Create() (*os.File, error) {
 	return p.File, err
 }
 
-func (p *Path) ReadAll() ([]byte, error) {
+func (p *Path) ReadFile() ([]byte, error) {
 	return os.ReadFile(p.path)
 }
 
