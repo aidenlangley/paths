@@ -1,66 +1,77 @@
-package paths
+package paths_test
 
 import (
+	"log"
 	"os"
+	"path"
 	"runtime"
 	"testing"
-	"time"
+
+	"git.sr.ht/~nedia/paths"
 )
 
-func resolve(t *testing.T, p string) string {
-	if _, err := Resolve(p); err != nil {
-		t.Errorf("ERR resolve %v %v", p, err)
-	}
-	return p
-}
+var (
+	err      error
+	homeDir  string
+	resolver *paths.Resolver
+)
 
-func TestResolveLocal(t *testing.T) {
-	_ = resolve(t, "paths.go")
-}
-
-func TestResolveHome(t *testing.T) {
-	home, err := os.UserHomeDir()
+func init() {
+	homeDir, err = os.UserHomeDir()
 	if err != nil {
-		t.Fatalf("ERR home %v", err)
+		log.Fatalf("ERR init %v", err)
 	}
-	_ = resolve(t, home)
+
+	resolver = paths.NewResolver()
 }
 
-func TestResolveSystem(t *testing.T) {
+func TestSimpleResolve(t *testing.T) {
+	resolve := func(s string) {
+		_, err := paths.Resolve(s)
+		if err != nil {
+			t.Errorf("ERR resolve %v %v", s, err)
+		}
+	}
+
+	// Resolve local to this code.
+	resolve("paths.go")
+
+	// Resolve path relative to home.
+	resolve(path.Join(homeDir, "Work/go_paths"))
+
+	// Resolve system paths.
 	if runtime.GOOS == "windows" {
-		_ = resolve(t, "C:\\Windows")
+		resolve("C:\\Windows")
 	} else if os.PathSeparator == '/' {
-		_ = resolve(t, "/home")
+		resolve("/tmp/")
+		resolve("/etc/")
 	}
 }
 
-func openHome(t *testing.T) FileInfo {
-	info, err := Open(Home())
-	if err != nil {
-		t.Errorf("ERR %s", err)
+func TestPathResolve(t *testing.T) {
+	resolve := func(p *paths.Path) {
+		_, err := p.Resolve()
+		if err != nil {
+			t.Errorf("ERR resolve %v %v", p.FileName(), err)
+		}
 	}
-	return info
-}
 
-func TestOpenHome(t *testing.T) {
-	_ = openHome(t)
-}
+	// Resolve local to this code.
+	resolve(paths.New("paths.go"))
 
-func TestFileInfoEquals(t *testing.T) {
-	info := openHome(t)
-	if other := info; !info.Equals(&other) {
-		t.Errorf("ERR %s != %s", info, other)
-	}
-}
+	// Resolve path relative to home.
+	resolve(paths.New(path.Join(homeDir, "Work/go_paths")))
 
-func TestFileInfoNewer(t *testing.T) {
-	info := openHome(t)
-	other := info
+	// Resolve path relative to home with [paths.ResolveToHome].
+	r := paths.NewResolver(paths.ResolveToHome())
+	resolve(paths.New("go").WithResolver(r))
+	resolve(paths.New(".config/nvim").WithResolver(r))
 
-	manyYearsAgo := time.Now().AddDate(-42, 0, 0)
-	other.Modified = manyYearsAgo
-
-	if !info.Newer(&other) {
-		t.Errorf("ERR %s > %s", info.Modified.String(), other.Modified.String())
+	// Resolve system paths.
+	if runtime.GOOS == "windows" {
+		resolve(paths.New("C:\\Windows"))
+	} else if os.PathSeparator == '/' {
+		resolve(paths.New("/tmp/"))
+		resolve(paths.New("/etc/"))
 	}
 }

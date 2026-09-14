@@ -12,253 +12,231 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package paths provides shortcuts to [os.UserHomeDir], [os.UserConfigDir]
-// & [os.UserCacheDir], the ability to [Resolve] a path, and a way to store
-// [os.Stat] info as [FileInfo] via [Open].
+// Package paths provides shortcuts the ability to [Resolve] a path, and a way
+// to store [os.Stat] info.
 package paths
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
-	"log"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 )
 
-var home, config, cache string
-
-// Given a pointer to a string, check if it's empty, if not then populate it
-// with the return value of the given function (unless it errors, in which case
-// [log.Fatal]).
-func checkAndGetString(s *string, f func() (string, error)) {
-	if *s != "" {
-		return
-	}
-
-	var err error
-	*s, err = f()
-	if err != nil {
-		log.Fatalf("paths %s", err)
-	}
-}
-
-// Home returns [os.UserHomeDir], but the value is cached locally to avoid
-// unnecessary repeat calls.
-func Home() string {
-	checkAndGetString(&home, os.UserHomeDir)
-	return home
-}
-
-// HomeWith is the same as [Home], except you can pass it a string to return
-// the full path you want for convenience.
-func HomeWith(p string) string {
-	checkAndGetString(&home, os.UserHomeDir)
-	return path.Join(home, p)
-}
-
-// Config returns [os.UserConfigDir], but the value is cached locally to avoid
-// unnecessary repeat calls.
-func Config() string {
-	checkAndGetString(&config, os.UserConfigDir)
-	return config
-}
-
-// ConfigWith is the same as [Config], except you can pass it a string to return
-// the full path you want for convenience.
-func ConfigWith(p string) string {
-	checkAndGetString(&config, os.UserConfigDir)
-	return path.Join(config, p)
-}
-
-// Cache returns [os.UserCacheDir], but the value is cached locally to avoid
-// unnecessary repeat calls.
-func Cache() string {
-	checkAndGetString(&cache, os.UserCacheDir)
-	return cache
-}
-
-// CacheWith is the same as [Cache], except you can pass it a string to return
-// the full path you want for convenience.
-func CacheWith(p string) string {
-	checkAndGetString(&cache, os.UserCacheDir)
-	return path.Join(cache, p)
-}
-
-// Exists checks if a file or directory exists at path.
-func Exists(path string) bool {
-	_, err := os.Stat(path)
+func Exists(s string) bool {
+	_, err := os.Stat(s)
 	return !errors.Is(err, os.ErrNotExist)
 }
 
-// Resolve attempts to resolve a path by checking first if it exists, otherwise
-// make it absolute and then check again. Returns [fs.ErrNotExist] on failure.
-func Resolve(path string) (string, error) {
-	if Exists(path) {
-		return path, nil
+// Absolute turns a relative path into an absolute one via [filepath.Abs].
+func Absolute(s string) (string, error) {
+	return filepath.Abs(s)
+}
+
+// Resolve attempts to resolve a path by checking first if it exists,
+// otherwise make it absolute and then check again. Returns [fs.ErrNotExist] on
+// failure.
+func Resolve(s string) (string, error) {
+	if Exists(s) {
+		return s, nil
 	}
 
-	if abs, err := filepath.Abs(path); err != nil {
-		return path, err
-	} else if Exists(abs) {
+	abs, err := Absolute(s)
+	if err != nil {
+		return s, err
+	}
+
+	if Exists(abs) {
 		return abs, nil
 	}
 
-	return path, fs.ErrNotExist
+	return s, fs.ErrNotExist
 }
 
-// PathResolver For more complex operations, this struct is provided to
-// facilitate options such as considering `$HOME` when resolving.
-type PathResolver struct {
-	Path          string
+// Path holds a string, can be configured to use a [Resolver], and stores the
+// file, plus metadata, after file operations.
+type Path struct {
+	Path string
+
+	resolver *Resolver
+
+	File     *os.File
+	FileInfo fs.FileInfo
+}
+
+func New(s string) *Path {
+	return &Path{
+		Path:     s,
+		resolver: &Resolver{},
+	}
+}
+
+func From(s string) *Path {
+	return New(s)
+}
+
+// WithResolver will add a [Resolver] to this [Path]. Builder pattern style.
+func (p *Path) WithResolver(r *Resolver) *Path {
+	p.resolver = r
+	return p
+}
+
+func (p *Path) Exists() bool {
+	return Exists(p.String())
+}
+
+func (p *Path) Absolute() (string, error) {
+	return Absolute(p.Path)
+}
+
+// Resolve just calls [Resolver.Resolve], all the logic can be found there.
+func (p *Path) Resolve() (string, error) {
+	resolved, err := p.resolver.Resolve(p.Path)
+	p.Path = resolved
+	return p.Path, err
+}
+
+// Stat calls [os.File.Stat] and sets [Path.FileInfo], or returns an error.
+func (p *Path) Stat() (fs.FileInfo, error) {
+	fi, err := p.File.Stat()
+	if err == nil {
+		p.FileInfo = fi
+	}
+
+	return p.FileInfo, err
+}
+
+// GetFileInfo gets [os.FileInfo] and sets [Path.FileInfo], regardless of error.
+func (p *Path) GetFileInfo() fs.FileInfo {
+	_, _ = p.Stat()
+	return p.FileInfo
+}
+
+func (p *Path) FileName() string {
+	if p.FileInfo == nil {
+		_ = p.GetFileInfo()
+	}
+
+	return p.FileInfo.Name()
+}
+
+func (p *Path) Open() (*os.File, error) {
+	f, err := os.Open(p.String())
+	if err != nil {
+		return f, err
+	}
+
+	p.File = f
+	_ = p.GetFileInfo()
+
+	return p.File, err
+}
+
+func (p *Path) OpenFile(flag int, perm os.FileMode) (*os.File, error) {
+	f, err := os.OpenFile(p.String(), flag, perm)
+	if err != nil {
+		return f, err
+	}
+
+	p.File = f
+	_ = p.GetFileInfo()
+
+	return f, err
+}
+
+func (p *Path) Create() (*os.File, error) {
+	f, err := os.Create(p.String())
+	if err != nil {
+		return f, err
+	}
+
+	p.File = f
+	_ = p.GetFileInfo()
+
+	return f, err
+}
+
+func (p *Path) Write(b []byte) (int, error) {
+	return p.File.Write(b)
+}
+
+// Equals determines if this [Path] is the same as other by comparing
+// [fs.FileInfo] data such as: [fs.FileInfo.Name], [fs.FileInfo.Size],
+// [fs.FileInfo.Mode] and [fs.FileInfo.ModTime].
+func (p *Path) Equals(other *Path) bool {
+	return p.FileInfo.Name() == other.FileInfo.Name() &&
+		p.FileInfo.Size() == other.FileInfo.Size() &&
+		p.FileInfo.Mode() == other.FileInfo.Mode() &&
+		p.FileInfo.ModTime().Equal(other.FileInfo.ModTime()) &&
+		p.FileInfo.IsDir() == other.FileInfo.IsDir()
+}
+
+// Newer determines if this [os.File] is newer than the other.
+func (p *Path) Newer(other *Path) bool {
+	return p.FileInfo.ModTime().After(other.FileInfo.ModTime())
+}
+
+// TimeSinceModified returns the [time.Duration] since this [os.File] was last
+// modified.
+func (p *Path) TimeSinceModified() time.Duration {
+	return time.Since(p.FileInfo.ModTime())
+}
+
+func (p *Path) String() string {
+	return p.Path
+}
+
+// Resolver For more complex operations, this struct is provided to facilitate
+// options such as considering `$HOME` when resolving.
+type Resolver struct {
 	ResolveToHome bool
 }
 
-// NewPathResolver creates a new [*PathResolver].
+// NewResolver creates a new [*Resolver].
 //
-//	r := paths.NewPathResolver(path, paths.ResolveToHome())
+//	r := NewResolver(path, ResolveToHome())
 //	path, err := r.Resolve()
-func NewPathResolver(path string, options ...ResolverOption) *PathResolver {
-	resolver := &PathResolver{Path: path}
+func NewResolver(options ...Option) *Resolver {
+	resolver := &Resolver{}
 	for _, option := range options {
 		option(resolver)
 	}
 	return resolver
 }
 
-// ResolverOption is a function that accepts a [*PathResolver] and applies some
+// Option is a function that accepts a [Resolver] and applies some
 // configuration.
-type ResolverOption func(*PathResolver)
+type Option func(*Resolver)
 
-// ResolveToHome pass this to [NewPathResolver] to instruct [PathResolver] to
-// consider `$HOME` when resolving a path.
-func ResolveToHome() ResolverOption {
-	return func(resolver *PathResolver) {
+// ResolveToHome instructs [Resolver] to consider `$HOME` when resolving a path.
+func ResolveToHome() Option {
+	return func(resolver *Resolver) {
 		resolver.ResolveToHome = true
 	}
 }
 
-// Resolve calls [Resolve], but on error, it will consider its [ResolverOption]s
-// and act appropriately.
-func (resolver *PathResolver) Resolve() (string, error) {
-	// Resolve without consider `$HOME`.
-	path, err := Resolve(resolver.Path)
-
-	// If there are no errors, we can just return, we've got our path.
-	if err == nil {
-		return path, err
-	}
-
-	// Otherwise, the file didn't exist, and we want to ResolveToHome, so go
-	// again.
-	if resolver.ResolveToHome {
-		path, err = Resolve(filepath.Join(Home(), resolver.Path))
-	}
-
-	return path, err
-}
-
-// FileInfoError returned by [Open], contains errors returned by [os.Open] &
-// [os.Stat] so you may utilise [errors.Is] like so...
-//
-//	 fi, err := paths.Open(path)
-//		 if errors.Is(err, os.PathError) {
-//		   ...
-//	 }
-type FileInfoError struct {
-	path string
-	err  error
-}
-
-func (e *FileInfoError) Error() string {
-	return fmt.Sprintf("paths %s %s", e.path, e.err)
-}
-
-func (e *FileInfoError) Unwrap() error {
-	return e.err
-}
-
-// FileInfo stores information on a file.
-type FileInfo struct {
-	Path      string    `json:"path"`
-	IsRegular bool      `json:"is_regular"`
-	IsDir     bool      `json:"is_dir"`
-	Name      string    `json:"filename"`
-	Size      int64     `json:"size"`
-	Modified  time.Time `json:"modified"`
-}
-
-// Equals determines if this [*FileInfo] is the same as other by comparing
-// name, size & modified [time.Time].
-func (fi *FileInfo) Equals(other *FileInfo) bool {
-	return fi.Name == other.Name &&
-		fi.Size == other.Size &&
-		fi.Modified.Equal(other.Modified)
-}
-
-// Newer determines if this [*FileInfo] is newer than other.
-func (fi *FileInfo) Newer(other *FileInfo) bool {
-	return fi.Modified.After(other.Modified)
-}
-
-// String return terminal friendly string.
-func (fi FileInfo) String() string {
-	return fi.Path
-}
-
-// Open calls [os.Open] and then [os.File.Stat] to populate [FileInfo].
-func Open(p string) (FileInfo, error) {
-	file, err := os.Open(p)
+// Resolve calls [Resolve], but on error, it will consider its [Option]s and act
+// appropriately.
+func (r *Resolver) Resolve(s string) (string, error) {
+	resolved, err := Resolve(s)
 	if err != nil {
-		return FileInfo{}, &FileInfoError{path: p, err: err}
-	}
-
-	defer func() {
-		if err := file.Close(); err != nil {
-			panic(err)
+		// Hasn't worked, so we can try resolving to $HOME.
+		if r.ResolveToHome {
+			return resolveToHome(s)
 		}
-	}()
+	}
 
-	info, err := file.Stat()
+	return resolved, err
+}
+
+// When resolving the path, it will assume it's been called from the $HOME dir,
+// so we prepend $HOME to the path, and then try to resolve it again.
+func resolveToHome(s string) (string, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return FileInfo{}, &FileInfoError{path: p, err: err}
+		return s, err
 	}
 
-	isRegular := info.Mode().IsRegular()
-	isDir := info.IsDir()
-	name := info.Name()
-	if isDir {
-		name = name + "/"
-	}
-
-	return FileInfo{
-		Path:      p,
-		Name:      name,
-		IsRegular: isRegular,
-		IsDir:     isDir,
-		Size:      info.Size(),
-		Modified:  info.ModTime(),
-	}, nil
-}
-
-// Path is just a string that can be operated on.
-//
-// All operations are platform agnostic.
-type Path string
-
-// Exists checks if this [*Path] exists on the system.
-func (p *Path) Exists() bool {
-	return Exists(p.String())
-}
-
-// Resolve calls [Resolve] on this [*Path].
-func (p *Path) Resolve() (string, error) {
-	return Resolve(p.String())
-}
-
-// String returns [Path] as a string.
-func (p Path) String() string {
-	return string(p)
+	return Resolve(filepath.Join(home, s))
 }
