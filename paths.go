@@ -57,8 +57,7 @@ func Resolve(s string) (string, error) {
 // Path holds a string, can be configured to use a [Resolver], and stores the
 // file, plus metadata, after file operations.
 type Path struct {
-	Path string
-
+	path     string
 	resolver *Resolver
 
 	File     *os.File
@@ -67,7 +66,7 @@ type Path struct {
 
 func New(s string) *Path {
 	return &Path{
-		Path:     s,
+		path:     s,
 		resolver: &Resolver{},
 	}
 }
@@ -83,104 +82,96 @@ func (p *Path) WithResolver(r *Resolver) *Path {
 }
 
 func (p *Path) Exists() bool {
-	return Exists(p.String())
+	return Exists(p.path)
 }
 
 func (p *Path) Absolute() (string, error) {
-	return Absolute(p.Path)
+	return Absolute(p.path)
 }
 
 // Resolve just calls [Resolver.Resolve], all the logic can be found there.
 func (p *Path) Resolve() (string, error) {
-	resolved, err := p.resolver.Resolve(p.Path)
-	p.Path = resolved
-	return p.Path, err
+	resolved, err := p.resolver.Resolve(p.path)
+	p.path = resolved
+	return p.path, err
 }
 
-// Stat calls [os.File.Stat] and sets [Path.FileInfo], or returns an error.
-func (p *Path) Stat() (fs.FileInfo, error) {
-	fi, err := p.File.Stat()
+func (p *Path) Create() (*os.File, error) {
+	f, err := os.Create(p.path)
 	if err == nil {
-		p.FileInfo = fi
-	}
-
-	return p.FileInfo, err
-}
-
-// GetFileInfo gets [os.FileInfo] and sets [Path.FileInfo], regardless of error.
-func (p *Path) GetFileInfo() fs.FileInfo {
-	_, _ = p.Stat()
-	return p.FileInfo
-}
-
-func (p *Path) FileName() string {
-	if p.FileInfo == nil {
+		p.File = f
 		_ = p.GetFileInfo()
 	}
+	return p.File, err
+}
 
-	return p.FileInfo.Name()
+func (p *Path) ReadAll() ([]byte, error) {
+	return os.ReadFile(p.path)
+}
+
+func (p *Path) ReadDir() ([]os.DirEntry, error) {
+	return os.ReadDir(p.path)
 }
 
 func (p *Path) Open() (*os.File, error) {
-	f, err := os.Open(p.String())
+	f, err := os.Open(p.path)
 	if err != nil {
-		return f, err
+		if _, err = p.Create(); err == nil {
+			return p.Open()
+		}
 	}
-
 	p.File = f
 	_ = p.GetFileInfo()
-
 	return p.File, err
 }
 
 func (p *Path) OpenFile(flag int, perm os.FileMode) (*os.File, error) {
-	f, err := os.OpenFile(p.String(), flag, perm)
+	f, err := os.OpenFile(p.path, flag, perm)
 	if err != nil {
-		return f, err
+		if f, err = p.Create(); err == nil {
+			return p.OpenFile(flag, perm)
+		}
 	}
-
 	p.File = f
 	_ = p.GetFileInfo()
-
-	return f, err
-}
-
-func (p *Path) Create() (*os.File, error) {
-	f, err := os.Create(p.String())
-	if err != nil {
-		return f, err
-	}
-
-	p.File = f
-	_ = p.GetFileInfo()
-
-	return f, err
+	return p.File, err
 }
 
 func (p *Path) Write(b []byte) (int, error) {
-	if p.File == nil {
-		f, err := p.OpenFile(os.O_RDWR, 0o644)
-		if err != nil {
-			if f, err = p.Create(); err != nil {
-				return 0, err
-			}
-		}
-
-		p.File = f
-		_ = p.GetFileInfo()
-	}
-
 	return p.File.Write(b)
+}
+
+func (p *Path) Delete() error {
+	return os.Remove(p.path)
+}
+
+func (p *Path) Truncate() error {
+	return os.Truncate(p.path, 0)
+}
+
+func (p *Path) Stat() (fs.FileInfo, error) {
+	return p.File.Stat()
+}
+
+// GetFileInfo gets [os.FileInfo] and sets [Path.FileInfo], regardless of error.
+func (p *Path) GetFileInfo() fs.FileInfo {
+	fi, _ := p.Stat()
+	p.FileInfo = fi
+	return p.FileInfo
+}
+
+func (p *Path) Modified() time.Time {
+	return p.FileInfo.ModTime()
+}
+
+func (p *Path) IsDir() bool {
+	return p.FileInfo.IsDir()
 }
 
 // Equals determines if this [Path] is the same as other by comparing
 // [fs.FileInfo] data such as: [fs.FileInfo.Name], [fs.FileInfo.Size],
 // [fs.FileInfo.Mode] and [fs.FileInfo.ModTime].
 func (p *Path) Equals(other *Path) bool {
-	if p.FileInfo == nil || other.FileInfo == nil {
-		return false
-	}
-
 	return p.FileInfo.Name() == other.FileInfo.Name() &&
 		p.FileInfo.Size() == other.FileInfo.Size() &&
 		p.FileInfo.Mode() == other.FileInfo.Mode() &&
@@ -190,28 +181,17 @@ func (p *Path) Equals(other *Path) bool {
 
 // Newer determines if this [os.File] is newer than the other.
 func (p *Path) Newer(other *Path) bool {
-	if other.FileInfo == nil {
-		return true
-	}
-
-	if p.FileInfo == nil {
-		_ = p.GetFileInfo()
-	}
-
 	return p.FileInfo.ModTime().After(other.FileInfo.ModTime())
 }
 
 // TimeSinceModified returns the [time.Duration] since this [os.File] was last
 // modified.
 func (p *Path) TimeSinceModified() time.Duration {
-	if p.FileInfo == nil {
-		_ = p.GetFileInfo()
-	}
-	return time.Since(p.FileInfo.ModTime())
+	return time.Since(p.Modified())
 }
 
 func (p *Path) String() string {
-	return p.Path
+	return p.path
 }
 
 // Resolver For more complex operations, this struct is provided to facilitate
@@ -220,16 +200,16 @@ type Resolver struct {
 	ResolveToHome bool
 }
 
-// NewResolver creates a new [*Resolver].
+// NewResolver creates a new [Resolver].
 //
 //	r := NewResolver(path, ResolveToHome())
 //	path, err := r.Resolve()
-func NewResolver(options ...Option) *Resolver {
-	resolver := &Resolver{}
-	for _, option := range options {
-		option(resolver)
+func NewResolver(opts ...Option) *Resolver {
+	r := &Resolver{}
+	for _, addOption := range opts {
+		addOption(r)
 	}
-	return resolver
+	return r
 }
 
 // Option is a function that accepts a [Resolver] and applies some
@@ -238,8 +218,8 @@ type Option func(*Resolver)
 
 // ResolveToHome instructs [Resolver] to consider `$HOME` when resolving a path.
 func ResolveToHome() Option {
-	return func(resolver *Resolver) {
-		resolver.ResolveToHome = true
+	return func(r *Resolver) {
+		r.ResolveToHome = true
 	}
 }
 
